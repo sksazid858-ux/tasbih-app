@@ -1,0 +1,322 @@
+name: Build APK
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Android project banao
+        run: |
+          mkdir www
+          cat > www/index.html <<'TASBIH_EOF'
+          <!doctype html>
+          <html lang="hi"><head><meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+          <style>html{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}</style>
+          <title>Tasbih Counter</title>
+          <meta name="claude:viewport-fit-sides" content="cover">
+          <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Hind:wght@400;500;600&display=swap">
+          <style>
+          /* Layout: one calm column. Dhikr chips on top, Arabic text, a large ring you tap, small controls below. */
+          :root {
+            --bg: #EDF3F1; --fg: #12231F; --surface: #FFFFFF; --line: #CBDAD5; --muted: #55706A;
+            --accent: #0F7B6C; --accent-fg: #FFFFFF; --ring-track: #D3E2DD; --gold: #A9791A;
+            --font-ar: "Amiri", "Noto Naskh Arabic", serif;
+            --font-body: "Hind", system-ui, sans-serif;
+          }
+          @media (prefers-color-scheme: dark) {
+            :root:not([data-theme="light"]) {
+              --bg: #0A1412; --fg: #E4F0EC; --surface: #12201D; --line: #223632; --muted: #8DA8A1;
+              --accent: #3CCBB0; --accent-fg: #04201A; --ring-track: #1E332E; --gold: #E5B550; color-scheme: dark;
+            }
+          }
+          :root[data-theme="dark"] {
+            --bg: #0A1412; --fg: #E4F0EC; --surface: #12201D; --line: #223632; --muted: #8DA8A1;
+            --accent: #3CCBB0; --accent-fg: #04201A; --ring-track: #1E332E; --gold: #E5B550; color-scheme: dark;
+          }
+          * { box-sizing: border-box; }
+          body {
+            background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 15px;
+            padding-block: 14px 28px;
+            padding-left: max(16px, env(safe-area-inset-left, 0px));
+            padding-right: max(16px, env(safe-area-inset-right, 0px));
+          }
+          .wrap { max-width: 460px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; align-items: stretch; }
+          .head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+          .head h1 { margin: 0; font-size: 20px; font-weight: 600; letter-spacing: .01em; }
+          .head span { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+          :focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+
+          .chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 6px; scrollbar-width: thin; }
+          .chip {
+            flex: 0 0 auto; min-height: 40px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--line);
+            background: var(--surface); color: var(--fg); font: 500 14px var(--font-body); cursor: pointer; white-space: nowrap;
+          }
+          .chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
+
+          .dhikr { text-align: center; display: grid; gap: 4px; min-height: 128px; align-content: center; }
+          .ar { font: 400 clamp(36px, 11vw, 48px)/1.5 var(--font-ar); direction: rtl; }
+          .rom { font-weight: 600; font-size: 17px; }
+          .mean { color: var(--muted); font-size: 14px; }
+          .step { color: var(--gold); font-size: 13px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; min-height: 18px; }
+
+          .ringbox { position: relative; width: min(78vw, 320px); aspect-ratio: 1; margin: 0 auto; max-width: 100%; }
+          .ringbox svg { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); }
+          .track { fill: none; stroke: var(--ring-track); stroke-width: 8; }
+          .prog { fill: none; stroke: var(--accent); stroke-width: 8; stroke-linecap: round; transition: stroke-dashoffset .18s ease; }
+          .prog.done { stroke: var(--gold); }
+          .tap {
+            position: absolute; inset: 7%; border-radius: 50%; border: 0; cursor: pointer; touch-action: manipulation;
+            background: var(--surface); color: var(--fg); box-shadow: 0 1px 0 var(--line) inset, 0 10px 30px rgba(0,0,0,.12);
+            display: grid; place-content: center; gap: 2px; text-align: center; -webkit-tap-highlight-color: transparent;
+            transition: transform .08s ease;
+          }
+          .tap:active { transform: scale(.97); }
+          .num { font: 600 clamp(64px, 22vw, 92px)/1 var(--font-body); font-variant-numeric: tabular-nums; }
+          .of { color: var(--muted); font-size: 14px; }
+          .msg { min-height: 24px; text-align: center; color: var(--gold); font-weight: 600; }
+
+          .row { display: flex; gap: 10px; flex-wrap: wrap; }
+          .row > * { flex: 1 1 120px; min-width: 0; }
+          .btn {
+            min-height: 46px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface);
+            color: var(--fg); font: 500 15px var(--font-body); cursor: pointer; padding: 0 12px;
+          }
+          .btn[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+          .btn.warn { border-color: var(--gold); color: var(--gold); font-weight: 600; }
+          select.btn { appearance: auto; }
+          .totals { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+          .tot { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+          .tot b { display: block; font-size: 22px; font-variant-numeric: tabular-nums; }
+          .tot small { color: var(--muted); }
+          .note { color: var(--muted); font-size: 12.5px; margin: 0; text-align: center; }
+          .amals { display: flex; flex-direction: column; gap: 12px; margin-top: 6px; }
+          .amals h2 { margin: 0; font-size: 17px; font-weight: 600; }
+          #amalList { display: flex; flex-direction: column; gap: 10px; }
+          .amal { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px; display: grid; gap: 8px; }
+          .amal-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+          .amal-top span { font-variant-numeric: tabular-nums; color: var(--muted); font-weight: 600; white-space: nowrap; }
+          .amal-top span.ok { color: var(--gold); }
+          .amal-go { min-height: 40px; padding: 0 12px 0 0; background: none; border: 0; color: var(--accent); font: 600 15px var(--font-body); cursor: pointer; text-align: left; min-width: 0; }
+          .bar { height: 8px; border-radius: 999px; background: var(--ring-track); overflow: hidden; }
+          .bar i { display: block; height: 100%; background: var(--accent); border-radius: 999px; transition: width .18s ease; }
+          .src { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
+          @media (prefers-reduced-motion: reduce) { .prog, .tap, .bar i { transition: none; } }
+          </style>
+
+          <div class="wrap">
+            <div class="head"><h1>Tasbih Counter</h1><span id="roundTxt">Round 1</span></div>
+
+            <div class="chips" id="chips" role="group" aria-label="Zikr chuno"></div>
+
+            <div class="dhikr" aria-live="polite">
+              <div class="step" id="stepTxt"></div>
+              <div class="ar" id="ar" lang="ar"></div>
+              <div class="rom" id="rom"></div>
+              <div class="mean" id="mean"></div>
+            </div>
+
+            <div class="ringbox">
+              <svg viewBox="0 0 120 120" aria-hidden="true">
+                <circle class="track" cx="60" cy="60" r="54"></circle>
+                <circle class="prog" id="prog" cx="60" cy="60" r="54"></circle>
+              </svg>
+              <button class="tap" id="tap" type="button" aria-label="Ginti badhao">
+                <span class="num" id="num">0</span>
+                <span class="of" id="of">33 mein se</span>
+              </button>
+            </div>
+            <div class="msg" id="msg" aria-live="polite"></div>
+
+            <div class="row">
+              <button class="btn" id="undo" type="button">Ek peeche</button>
+              <button class="btn" id="reset" type="button">Reset</button>
+              <select class="btn" id="tgt" aria-label="Target chuno"></select>
+            </div>
+            <div class="row">
+              <button class="btn" id="vib" type="button" aria-pressed="true">Vibration ON</button>
+              <button class="btn" id="snd" type="button" aria-pressed="false">Awaaz OFF</button>
+            </div>
+
+            <div class="totals">
+              <div class="tot"><b id="today">0</b><small>Aaj ki ginti</small></div>
+              <div class="tot"><b id="life">0</b><small>Kul ginti</small></div>
+            </div>
+            <section class="amals" aria-label="Roz ka Amal">
+              <div class="head"><h2>Roz ka Amal</h2><span id="streak">Lagatar 0 din</span></div>
+              <div id="amalList"></div>
+              <p class="note">Hawale yaadasht se likhe hain. Dusron ko dene se pehle kisi aalim ya Sunnah.com se ek baar milwa lo (kitaab ke number edition ke hisaab se alag ho sakte hain). Sabab Allah ke haath mein hai, app sirf ginti rakhta hai.</p>
+            </section>
+            <p class="note">Ginti is phone ke browser mein save hoti hai. Screen on rakhne ke liye ek baar tap karo.</p>
+          </div>
+
+          <script>
+          var D = [
+            { k: "sub", ar: "سُبْحَانَ اللَّهِ", rom: "SubhanAllah", mean: "Allah paak hai", t: 33 },
+            { k: "alh", ar: "الْحَمْدُ لِلَّهِ", rom: "Alhamdulillah", mean: "Sab tareef Allah ke liye hai", t: 33 },
+            { k: "akb", ar: "اللَّهُ أَكْبَرُ", rom: "Allahu Akbar", mean: "Allah sabse bada hai", t: 34 },
+            { k: "ast", ar: "أَسْتَغْفِرُ اللَّهَ", rom: "Astaghfirullah", mean: "Main Allah se maafi maangta hoon", t: 100 },
+            { k: "lai", ar: "لَا إِلَٰهَ إِلَّا اللَّهُ", rom: "La ilaha illallah", mean: "Allah ke siwa koi ibadat ke laayak nahi", t: 100 },
+            { k: "dur", ar: "اللَّهُمَّ صَلِّ عَلَىٰ مُحَمَّدٍ", rom: "Allahumma salli ala Muhammad", mean: "Ae Allah, Muhammad (saw) par rehmat bhej", t: 100 }
+          ,
+            { k: "sbh", ar: "سُبْحَانَ اللَّهِ وَبِحَمْدِهِ", rom: "Subhanallahi wa bihamdihi", mean: "Allah paak hai aur sab tareef usi ke liye hai", t: 100 }
+          ];
+          var GOAL = { ast: 100, sbh: 100, dur: 100 };
+          var AMAL = [
+            { k: "ast", name: "Istighfar", src: "Nabi (saw) din mein 70 se zyada baar istighfar karte the (Bukhari 6307). Muslim ki riwayat mein 100 baar aaya hai (Muslim 2702)." },
+            { k: "sbh", name: "Subhanallahi wa bihamdihi", src: "Jo din mein 100 baar padhe, uske gunah maaf kar diye jaate hain, chahe samundar ke jhaag jitne hon (Bukhari 6405, Muslim 2691)." },
+            { k: "dur", name: "Durood", src: "Jo mujh par ek baar durood bhejta hai, Allah us par 10 rehmatein bhejta hai (Muslim 408)." }
+          ];
+          var FAT = { k: "fat", name: "Tasbih-e-Fatima (33 + 33 + 34)" };
+          var TARGETS = [11, 33, 34, 99, 100, 313, 500, 1000];
+          var KEY = "tasbih.v1";
+          var S = null, resetTimer = null, audioCtx = null, wake = null;
+
+          function dayKey() { var d = new Date(); return d.getFullYear() + "-" + (d.getMonth() + 1) + "-" + d.getDate(); }
+          function defaults() { return { mode: "sub", count: 0, step: 0, tgt: 33, rounds: 1, done: false, vib: true, snd: false, today: { d: dayKey(), n: 0 }, life: 0, daily: { d: dayKey(), c: { ast: 0, sbh: 0, dur: 0 } }, streak: 0, last: "", prev: null }; }
+          function load() {
+            var s = defaults();
+            try { var raw = localStorage.getItem(KEY); if (raw) { var p = JSON.parse(raw); for (var k in p) s[k] = p[k]; } } catch (e) {}
+            if (!s.today || s.today.d !== dayKey()) s.today = { d: dayKey(), n: 0 };
+            if (!s.daily || !s.daily.c || s.daily.d !== dayKey()) s.daily = { d: dayKey(), c: { ast: 0, sbh: 0, dur: 0 } };
+            return s;
+          }
+          function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
+
+          function cur() { if (S.mode === "fat") return D[S.step]; for (var i = 0; i < D.length; i++) if (D[i].k === S.mode) return D[i]; return D[0]; }
+          function target() { return S.mode === "fat" ? D[S.step].t : S.tgt; }
+
+          function buzz(ms) { if (!S.vib) return; try { if (navigator.vibrate) navigator.vibrate(ms); } catch (e) {} }
+          function tick(high) {
+            if (!S.snd) return;
+            try {
+              audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+              var o = audioCtx.createOscillator(), g = audioCtx.createGain();
+              o.type = "sine"; o.frequency.value = high ? 880 : 520;
+              g.gain.setValueAtTime(0.0001, audioCtx.currentTime);
+              g.gain.exponentialRampToValueAtTime(0.25, audioCtx.currentTime + 0.01);
+              g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + (high ? 0.35 : 0.09));
+              o.connect(g); g.connect(audioCtx.destination); o.start(); o.stop(audioCtx.currentTime + (high ? 0.4 : 0.1));
+            } catch (e) {}
+          }
+          function keepAwake() {
+            try { if (!wake && navigator.wakeLock) navigator.wakeLock.request("screen").then(function (w) { wake = w; w.addEventListener("release", function () { wake = null; }); }, function () {}); } catch (e) {}
+          }
+          function say(t) { document.getElementById("msg").textContent = t; }
+
+          function roll() {
+            var k = dayKey();
+            if (S.today.d !== k) S.today = { d: k, n: 0 };
+            if (S.daily.d !== k) S.daily = { d: k, c: { ast: 0, sbh: 0, dur: 0 } };
+          }
+          function ykey() { var d = new Date(Date.now() - 864e5); return d.getFullYear() + "-" + (d.getMonth() + 1) + "-" + d.getDate(); }
+          function allDone() { for (var k in GOAL) if ((S.daily.c[k] || 0) < GOAL[k]) return false; return true; }
+          function bump(k, n) {
+            if (GOAL[k] === undefined) return;
+            S.daily.c[k] = Math.max(0, (S.daily.c[k] || 0) + n);
+            var t = dayKey();
+            if (allDone() && S.last !== t) {
+              S.prev = { s: S.streak, l: S.last };
+              S.streak = (S.last === ykey()) ? S.streak + 1 : 1; S.last = t;
+              say("MashaAllah, aaj ka poora amal ho gaya");
+            } else if (!allDone() && S.last === t && S.prev) {
+              S.streak = S.prev.s; S.last = S.prev.l; S.prev = null;
+            }
+          }
+          function renderAmal() {
+            var st = (S.last === dayKey() || S.last === ykey()) ? S.streak : 0;
+            document.getElementById("streak").textContent = "Lagatar " + st + " din";
+            var h = "";
+            AMAL.forEach(function (a) {
+              var c = S.daily.c[a.k] || 0, g = GOAL[a.k], pc = Math.min(100, Math.round(c * 100 / g));
+              h += "<div class=\"amal\"><div class=\"amal-top\"><button class=\"amal-go\" type=\"button\" data-k=\"" + a.k + "\">" + a.name + "</button>"
+                + "<span class=\"" + (c >= g ? "ok" : "") + "\">" + c + " / " + g + "</span></div>"
+                + "<div class=\"bar\"><i style=\"width:" + pc + "%\"></i></div><p class=\"src\">" + a.src + "</p></div>";
+            });
+            document.getElementById("amalList").innerHTML = h;
+          }
+
+          function tap() {
+            keepAwake();
+            if (S.done) { S.done = false; S.count = 0; S.step = 0; S.rounds++; say(""); }
+            roll(); S.count++; S.today.n++; S.life++; bump(cur().k, 1);
+            var t = target();
+            if (S.count >= t) {
+              if (S.mode === "fat" && S.step < 2) {
+                S.step++; S.count = 0;
+                say("Ab " + D[S.step].rom + " " + D[S.step].t + " baar");
+                buzz([60, 40, 60]); tick(true);
+              } else {
+                S.done = true;
+                say("MashaAllah, " + (S.mode === "fat" ? "Tasbih-e-Fatima poori hui" : t + " poore hue"));
+                buzz([80, 50, 80, 50, 160]); tick(true);
+              }
+            } else { buzz(12); tick(false); }
+            save(); render();
+          }
+
+          function render() {
+            var d = cur(), t = target();
+            document.getElementById("ar").textContent = d.ar;
+            document.getElementById("rom").textContent = d.rom;
+            document.getElementById("mean").textContent = d.mean;
+            document.getElementById("stepTxt").textContent = S.mode === "fat" ? "Step " + (S.step + 1) + " / 3" : "";
+            document.getElementById("num").textContent = S.count;
+            document.getElementById("of").textContent = t + " mein se";
+            document.getElementById("roundTxt").textContent = "Round " + S.rounds;
+            var C = 2 * Math.PI * 54, p = document.getElementById("prog");
+            p.style.strokeDasharray = C.toFixed(2);
+            p.style.strokeDashoffset = (C * (1 - Math.min(S.count / t, 1))).toFixed(2);
+            p.setAttribute("class", "prog" + (S.done ? " done" : ""));
+            document.getElementById("today").textContent = S.today.n;
+            document.getElementById("life").textContent = S.life;
+            var vb = document.getElementById("vib"), sb = document.getElementById("snd");
+            vb.setAttribute("aria-pressed", String(S.vib)); vb.textContent = S.vib ? "Vibration ON" : "Vibration OFF";
+            sb.setAttribute("aria-pressed", String(S.snd)); sb.textContent = S.snd ? "Awaaz ON" : "Awaaz OFF";
+            var sel = document.getElementById("tgt");
+            sel.disabled = S.mode === "fat"; sel.value = String(S.tgt);
+            var chips = document.querySelectorAll("#chips .chip");
+            for (var i = 0; i < chips.length; i++) chips[i].setAttribute("aria-pressed", String(chips[i].getAttribute("data-k") === S.mode));
+            renderAmal();
+          }
+
+          function pick(k) {
+            S.mode = k; S.count = 0; S.step = 0; S.rounds = 1; S.done = false; say("");
+            if (k !== "fat") { for (var i = 0; i < D.length; i++) if (D[i].k === k) S.tgt = D[i].t; }
+            save(); render();
+          }
+
+          (function build() {
+            S = load();
+            var c = document.getElementById("chips"), h = "";
+            h += "<button class=\"chip\" type=\"button\" data-k=\"fat\">Tasbih-e-Fatima</button>";
+            D.forEach(function (d) { h += "<button class=\"chip\" type=\"button\" data-k=\"" + d.k + "\">" + d.rom + "</button>"; });
+            c.innerHTML = h;
+            c.addEventListener("click", function (e) { var b = e.target.closest(".chip"); if (b) pick(b.getAttribute("data-k")); });
+            var sel = document.getElementById("tgt");
+            sel.innerHTML = TARGETS.map(function (n) { return "<option value=\"" + n + "\">Target " + n + "</option>"; }).join("");
+            sel.addEventListener("change", function () {
+              S.tgt = parseInt(sel.value, 10);
+              if (S.count > S.tgt || S.done) { S.count = 0; S.done = false; say(""); }
+              save(); render();
+            });
+            document.getElementById("amalList").addEventListener("click", function (e) {
+              var b = e.target.closest(".amal-go");
+              if (b) { pick(b.getAttribute("data-k")); try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch (x) {} }
+            });
+            document.getElementById("tap").addEventListener("click", tap);
+            d
